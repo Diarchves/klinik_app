@@ -1,0 +1,52 @@
+# ---- Flutter / Dart -------------------------------------------------------
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-versions
+**/build/
+**/generated_plugin_registrant.*
+
+# ---- Android --------------------------------------------------------------
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# ---- iOS / macOS ----------------------------------------------------------
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/GeneratedPluginRegistrant.*
+**/macos/Flutter/ephemeral/
+**/macos/Pods/
+**/macos/GeneratedPluginRegistrant.*
+
+# ---- Windows / Linux ------------------------------------------------------
+**/linux/flutter/ephemeral/
+**/linux/.generated/
+**/windows/flutter/ephemeral/
+**/windows/.generated/
+
+# ---- Web ------------------------------------------------------------------
+**/web/.dart_tool/
+**/web/.flutter-plugins
+
+# ---- IDE / Tooling --------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+
+# ---- Misc -----------------------------------------------------------------
+.DS_Store
+*.log
+*.tmp
+*.swp
