@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
-import '../pages/auth/login_page.dart';
-import '../pages/auth/register_page.dart';
-import '../pages/features/antrian_page.dart';
-import '../pages/features/buat_janji_page.dart';
-import '../pages/features/data_dokter_page.dart';
-import '../utils/session_manager.dart';
+
+import 'package:klinik_app/pages/auth/register_page.dart';
+import 'package:klinik_app/pages/features/admin_antrian_page.dart';
+import 'package:klinik_app/pages/features/admin_rekam_medis_page.dart';
+import 'package:klinik_app/pages/features/antrian_page.dart';
+import 'package:klinik_app/pages/features/buat_janji_page.dart';
+import 'package:klinik_app/pages/features/data_dokter_page.dart';
+import 'package:klinik_app/pages/features/jadwal_dokter_page.dart';
+import 'package:klinik_app/pages/features/laporan_page.dart';
+import 'package:klinik_app/pages/features/obat_page.dart';
+import 'package:klinik_app/pages/features/pasien_page.dart';
+import 'package:klinik_app/pages/features/rekam_medis_page.dart';
+import 'package:klinik_app/utils/session_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,10 +21,33 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool logged = false;
-  bool demoMode = false;
-
   final PageController _pageController = PageController();
+  String? _namaPengguna;
+  bool _loadingUser = true;
+  bool _isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final nama = await SessionManager.getNama();
+    final isAdmin = await SessionManager.isAdmin();
+    if (!mounted) return;
+    setState(() {
+      _namaPengguna = nama;
+      _loadingUser = false;
+      _isAdmin = isAdmin;
+    });
+  }
+
+  Future<void> _logout() async {
+    await SessionManager.logout();
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
 
   final List<String> banners = [
     'assets/images/banner1.jpg',
@@ -26,114 +56,57 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    _checkLogin();
-  }
-
-  @override
   void dispose() {
-    _pageController.dispose(); // 🔴 WAJIB
+    _pageController.dispose();
     super.dispose();
-  }
-
-  Future<void> _checkLogin() async {
-    final isLogin = await SessionManager.isLogin();
-    final nama = await SessionManager.getNama();
-
-    setState(() {
-      logged = isLogin;
-      demoMode = nama == 'Demo Mode';
-    });
-  }
-
-  Future<void> _openFeature(
-    Widget page, {
-    bool requireLogin = true,
-  }) async {
-    if (requireLogin && !await _ensureLogin()) {
-      return;
-    }
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => page),
-    );
-  }
-
-  Future<bool> _ensureLogin() async {
-    if (logged) return true;
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-    );
-    if (result == true) {
-      await _checkLogin();
-      return true;
-    }
-    return false;
-  }
-
-  void _showComingSoon(String featureName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Fitur "$featureName" masih dalam pengembangan.')),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final greetingText = _loadingUser
+        ? 'Memuat profil...'
+        : 'Halo, ${_namaPengguna ?? 'Pengguna'}';
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text('Klinik Rawat Jalan'),
-            const SizedBox(width: 8),
-            if (demoMode)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.yellow,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'DEMO',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-          ],
-        ),
+        title: const Text('Klinik Rawat Jalan'),
+        centerTitle: true,
         actions: [
-          if (logged)
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () async {
-                await SessionManager.logout();
-                _checkLogin();
-              },
-            ),
+          IconButton(
+            tooltip: 'Keluar',
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+          ),
         ],
       ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ===== HEADER =====
+            // HEADER
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               color: Colors.blue.shade50,
-              child: const Text(
-                'Selamat Datang di Aplikasi Klinik Rawat Jalan',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Selamat Datang di Aplikasi Klinik Rawat Jalan',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    greetingText,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
               ),
             ),
 
-            // ===== IMAGE SLIDER =====
+            // IMAGE SLIDER
             SizedBox(
-              height: 180,
+              height: 160,
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: banners.length,
@@ -145,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Image.asset(
                         banners[index],
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (context, error, stackTrace) => Container(
                           color: Colors.grey.shade300,
                           child: const Center(
                             child: Text('Gambar tidak tersedia'),
@@ -159,65 +132,102 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
             const Padding(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
                 'Layanan Klinik',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
 
-            // ===== GRID MENU =====
+            // GRID MENU
             GridView.count(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
+              crossAxisCount: 3,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
+              childAspectRatio: 0.9,
               children: [
-                _menu(
-                  'Buat Janji',
-                  Icons.calendar_month,
-                  () => _openFeature(const BuatJanjiPage()),
-                ),
-                _menu(
-                  'Pendaftaran Pasien',
-                  Icons.person_add,
-                  () => Navigator.push(
+                _menu('Buat Janji', Icons.calendar_month, () {
+                  Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const RegisterPage()),
-                  ),
-                ),
-                _menu(
-                  'Jadwal Dokter',
-                  Icons.schedule,
-                  () => _openFeature(
-                    const DataDokterPage(),
-                    requireLogin: false,
-                  ),
-                ),
-                _menu(
-                  'Antrian Saya',
-                  Icons.list_alt,
-                  () => _openFeature(const AntrianPage()),
-                ),
-                _menu(
-                  'Riwayat Medis',
-                  Icons.medical_services,
-                  () => _showComingSoon('Riwayat Medis'),
-                ),
-                _menu(
-                  'Resep & Obat',
-                  Icons.medication,
-                  () => _showComingSoon('Resep & Obat'),
-                ),
-                _menu(
-                  'Pembayaran',
-                  Icons.payment,
-                  () => _showComingSoon('Pembayaran'),
-                ),
+                    MaterialPageRoute(builder: (_) => const BuatJanjiPage()),
+                  );
+                }),
+                if (_isAdmin) ...[
+                  _menu('Pasien', Icons.people, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PasienPage()),
+                    );
+                  }),
+                  _menu('Daftar Pasien', Icons.person_add_alt_1, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RegisterPage()),
+                    );
+                  }),
+                ],
+                _menu('Dokter', Icons.medical_information, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DataDokterPage()),
+                  );
+                }),
+                _menu('Jadwal', Icons.schedule, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const JadwalDokterPage()),
+                  );
+                }),
+                if (_isAdmin)
+                  _menu('Rekam Medis', Icons.folder_special, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AdminRekamMedisPage(),
+                      ),
+                    );
+                  })
+                else
+                  _menu('Rekam Medis', Icons.folder_shared, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RekamMedisPage()),
+                    );
+                  }),
+                _menu('Obat', Icons.medication, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ObatPage()),
+                  );
+                }),
+                if (_isAdmin)
+                  _menu('Kelola Antrian', Icons.rule_folder, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AdminAntrianPage(),
+                      ),
+                    );
+                  })
+                else
+                  _menu('Antrian', Icons.queue, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AntrianPage()),
+                    );
+                  }),
+                _menu('Laporan', Icons.bar_chart, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LaporanPage()),
+                  );
+                }),
               ],
             ),
+
             const SizedBox(height: 24),
           ],
         ),
@@ -227,15 +237,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _menu(String title, IconData icon, VoidCallback onTap) {
     return InkWell(
+      borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Card(
+        elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 40, color: Colors.blue),
-            const SizedBox(height: 8),
-            Text(title, textAlign: TextAlign.center),
+            Icon(icon, size: 32, color: Colors.blue),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12),
+            ),
           ],
         ),
       ),

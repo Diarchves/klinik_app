@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../services/api_service.dart';
 import '../../utils/session_manager.dart';
 
@@ -10,36 +11,35 @@ class AntrianPage extends StatefulWidget {
 }
 
 class _AntrianPageState extends State<AntrianPage> {
-  late Future<List<Map<String, dynamic>>> _future;
+  late Future<List<dynamic>> _antrianFuture;
 
   @override
   void initState() {
     super.initState();
-    _future = _fetchAntrian();
+    _antrianFuture = _loadAntrian();
   }
 
-  Future<List<Map<String, dynamic>>> _fetchAntrian() async {
-    final id = await SessionManager.getId();
-    if (id == null) {
-      throw ApiException('Silakan login terlebih dahulu.');
+  Future<List<dynamic>> _loadAntrian() async {
+    final idPasien = await SessionManager.getId();
+    if (idPasien == null || idPasien <= 0) {
+      throw Exception('Fitur ini hanya untuk akun pasien');
     }
-    final response = await ApiService.getAntrian(id);
-    final data = response['data'];
+    final res = await ApiService.getAntrian(idPasien);
+    if (res['success'] != true) {
+      throw Exception(res['message'] ?? 'Gagal mengambil antrian');
+    }
+    final data = res['data'];
     if (data is List) {
-      return data
-          .map((item) => item is Map<String, dynamic>
-              ? item
-              : Map<String, dynamic>.from(item as Map<dynamic, dynamic>))
-          .toList();
+      return data;
     }
-    return <Map<String, dynamic>>[];
+    return [];
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _future = _fetchAntrian();
+      _antrianFuture = _loadAntrian();
     });
-    await _future;
+    await _antrianFuture;
   }
 
   @override
@@ -48,8 +48,8 @@ class _AntrianPageState extends State<AntrianPage> {
       appBar: AppBar(title: const Text('Daftar Antrian')),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _future,
+        child: FutureBuilder<List<dynamic>>(
+          future: _antrianFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -58,46 +58,51 @@ class _AntrianPageState extends State<AntrianPage> {
               return ListView(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      snapshot.error.toString(),
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Text(snapshot.error.toString()),
                   ),
                 ],
               );
             }
-            final items = snapshot.data ?? [];
-            if (items.isEmpty) {
+            final data = snapshot.data ?? [];
+            if (data.isEmpty) {
               return ListView(
                 children: const [
                   Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('Belum ada antrian untuk akun ini.'),
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: Text('Tidak ada antrian untuk Anda')),
                   ),
                 ],
               );
             }
             return ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemCount: data.length,
+              separatorBuilder: (context, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                final item = items[index];
-                final nomor = item['no_antrian'] ?? '-';
-                final status = item['status']?.toString().toUpperCase() ?? '-';
+                final item = data[index] as Map<String, dynamic>? ?? {};
                 final dokter = item['nama_dokter']?.toString() ?? '-';
-                final tanggal = item['tanggal']?.toString() ?? '';
-                final waktu = item['waktu']?.toString() ?? '';
+                final tanggal = item['tanggal']?.toString() ?? '-';
+                final waktu = item['waktu']?.toString() ?? '-';
+                final noAntrian = item['no_antrian']?.toString() ?? '-';
+                final status = item['status']?.toString() ?? '-';
                 return Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: ListTile(
-                    leading: CircleAvatar(child: Text('$nomor')),
+                    leading: CircleAvatar(child: Text(noAntrian)),
                     title: Text(dokter),
-                    subtitle: Text('$tanggal • $waktu'),
-                    trailing: Text(status),
+                    subtitle: Text('Tanggal: $tanggal\nJam: $waktu'),
+                    trailing: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(status.toUpperCase()),
+                    ),
                   ),
                 );
               },

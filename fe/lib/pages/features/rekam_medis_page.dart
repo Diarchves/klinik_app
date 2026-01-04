@@ -1,29 +1,95 @@
 import 'package:flutter/material.dart';
 
-class RekamMedisPage extends StatelessWidget {
+import '../../services/api_service.dart';
+import '../../utils/session_manager.dart';
+
+class RekamMedisPage extends StatefulWidget {
   const RekamMedisPage({super.key});
+
+  @override
+  State<RekamMedisPage> createState() => _RekamMedisPageState();
+}
+
+class _RekamMedisPageState extends State<RekamMedisPage> {
+  late Future<List<dynamic>> _rekamFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _rekamFuture = _loadRekamMedis();
+  }
+
+  Future<List<dynamic>> _loadRekamMedis() async {
+    final id = await SessionManager.getId();
+    if (id == null || id <= 0) {
+      throw Exception('Fitur ini hanya untuk akun pasien');
+    }
+    final res = await ApiService.getRekamMedis(id);
+    if (res['success'] != true) {
+      throw Exception(res['message'] ?? 'Gagal mengambil rekam medis');
+    }
+    final data = res['data'];
+    if (data is List) return data;
+    return [];
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _rekamFuture = _loadRekamMedis();
+    });
+    await _rekamFuture;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Rekam Medis')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          _RekamMedisCard(
-            tanggal: '12 Desember 2025',
-            dokter: 'Dr. Andi Wijaya',
-            diagnosa: 'Demam',
-            tindakan: 'Pemberian obat penurun panas',
-          ),
-          SizedBox(height: 12),
-          _RekamMedisCard(
-            tanggal: '5 November 2025',
-            dokter: 'Dr. Siti Aminah',
-            diagnosa: 'Sakit gigi',
-            tindakan: 'Pembersihan dan penambalan',
-          ),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: FutureBuilder<List<dynamic>>(
+          future: _rekamFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return ListView(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(snapshot.error.toString()),
+                  ),
+                ],
+              );
+            }
+            final data = snapshot.data ?? [];
+            if (data.isEmpty) {
+              return ListView(
+                children: const [
+                  Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: Text('Belum ada rekam medis')),
+                  ),
+                ],
+              );
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: data.length,
+              separatorBuilder: (context, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final item = data[index] as Map<String, dynamic>? ?? {};
+                return _RekamMedisCard(
+                  tanggal: item['tanggal']?.toString() ?? '-',
+                  dokter: item['nama_dokter']?.toString() ?? '-',
+                  diagnosa: item['diagnosa']?.toString() ?? '-',
+                  tindakan: item['tindakan']?.toString() ?? '-',
+                  catatan: item['catatan']?.toString(),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -34,12 +100,14 @@ class _RekamMedisCard extends StatelessWidget {
   final String dokter;
   final String diagnosa;
   final String tindakan;
+  final String? catatan;
 
   const _RekamMedisCard({
     required this.tanggal,
     required this.dokter,
     required this.diagnosa,
     required this.tindakan,
+    this.catatan,
   });
 
   @override
@@ -65,11 +133,16 @@ class _RekamMedisCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text('Dokter: $dokter'),
             const SizedBox(height: 6),
-            Text('Diagnosa:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Diagnosa:', style: TextStyle(fontWeight: FontWeight.bold)),
             Text(diagnosa),
             const SizedBox(height: 6),
-            Text('Tindakan:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Tindakan:', style: TextStyle(fontWeight: FontWeight.bold)),
             Text(tindakan),
+            if (catatan != null && catatan!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              const Text('Catatan:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(catatan!),
+            ],
           ],
         ),
       ),

@@ -24,7 +24,7 @@ Folder `klinik_api/` menyimpan endpoint ringan yang diakses oleh Flutter (`lib/s
    export DB_PASS=your_password
    export ADMIN_TOKEN=super-secret-token
     export ADMIN_USERNAME=admin
-    export ADMIN_PASSWORD_HASH='$2y$10$7Kp5bUgHkdjP88Ea49X3Men/C06RaoXu1v1jxENdJqfhwF3EX8G7m' # hash dari admin123
+    export ADMIN_PASSWORD_HASH='$2y$12$TSKU3Ejg4.wxXG7uTYL23eJldFEr7EY20JyHSJZA2zB3wmA4kRaAC' # hash dari password 'admin'
    ```
    > **Catatan:** `ADMIN_PASSWORD_HASH` menerima nilai hasil `password_hash(<password>, PASSWORD_BCRYPT)`.
 4. Jalankan server lokal (opsional) dari folder `be/klinik_api`:

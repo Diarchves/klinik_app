@@ -19,7 +19,7 @@ if (!defined('DB_HOST')) {
     define('DB_PASS', getenv('DB_PASS') ?: 'a');
     define('ADMIN_TOKEN', getenv('ADMIN_TOKEN') ?: 'change-me-admin-token');
     define('ADMIN_USERNAME', getenv('ADMIN_USERNAME') ?: 'admin');
-    define('ADMIN_PASSWORD_HASH', getenv('ADMIN_PASSWORD_HASH') ?: '$2y$10$7Kp5bUgHkdjP88Ea49X3Men/C06RaoXu1v1jxENdJqfhwF3EX8G7m');
+    define('ADMIN_PASSWORD_HASH', getenv('ADMIN_PASSWORD_HASH') ?: '$2y$12$TSKU3Ejg4.wxXG7uTYL23eJldFEr7EY20JyHSJZA2zB3wmA4kRaAC');
 }
 
 function db(): PDO

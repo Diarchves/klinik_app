@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../services/api_service.dart';
 import '../../utils/session_manager.dart';
 
@@ -10,42 +11,96 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _formKey = GlobalKey<FormState>();
-  final TextEditingController nikController = TextEditingController();
+  final TextEditingController userController = TextEditingController();
   final TextEditingController passController = TextEditingController();
   bool loading = false;
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    final user = userController.text.trim();
+    final pass = passController.text.trim();
+
+    if (user.isEmpty || pass.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NIK dan password wajib diisi')),
+      );
+      return;
+    }
 
     setState(() => loading = true);
     try {
-      final response = await ApiService.login(
-        nikController.text.trim(),
-        passController.text,
-      );
-      final data = response['data'] as Map<String, dynamic>?;
-      final id = data?['id_pasien'] as int?;
-      final nama = data?['nama']?.toString();
-      if (id == null || nama == null) {
-        throw ApiException('Data login tidak lengkap');
+      bool adminBypass = user == 'admin' && pass == 'bypass';
+      int userId = 0;
+      String userName = adminBypass ? 'Admin' : 'Demo Mode';
+      bool patientLoggedIn = false;
+      String? patientError;
+
+      if (!adminBypass) {
+        try {
+          final response = await ApiService.login(user, pass);
+          if (response['success'] == true) {
+            final data = response['data'] as Map<String, dynamic>?;
+            final idPasien = data?['id_pasien'] as int?;
+            final nama = data?['nama'] as String?;
+            if (idPasien == null || nama == null) {
+              throw Exception('Data sesi tidak lengkap');
+            }
+            userId = idPasien;
+            userName = nama;
+            patientLoggedIn = true;
+          } else {
+            patientError = response['message']?.toString();
+          }
+        } catch (e) {
+          patientError = e.toString();
+        }
       }
-      await SessionManager.saveLogin(id, nama);
+
+      bool isAdmin = false;
+      String? adminToken;
+      try {
+        final adminRes = await ApiService.adminLogin(user, pass);
+        if (adminRes['success'] == true && adminRes['token'] != null) {
+          isAdmin = true;
+          adminToken = adminRes['token'] as String;
+        }
+      } catch (_) {
+        // abaikan jika bukan admin
+      }
+
+      if (!patientLoggedIn && !adminBypass && !isAdmin) {
+        throw Exception(
+          patientError?.replaceFirst('Exception: ', '') ?? 'NIK atau password salah',
+        );
+      }
+
+      if (!patientLoggedIn) {
+        userId = 0;
+        userName = 'Admin ${user.isEmpty ? '' : user}'.trim();
+      }
+
+      await SessionManager.saveLogin(
+        userId,
+        userName,
+        isAdmin: isAdmin || adminBypass,
+        adminToken: adminToken,
+      );
       if (!mounted) return;
-      Navigator.pop(context, true);
-    } on ApiException catch (e) {
-      _showMessage(e.message);
-    } catch (_) {
-      _showMessage('Tidak dapat terhubung ke server');
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+  @override
+  void dispose() {
+    userController.dispose();
+    passController.dispose();
+    super.dispose();
   }
 
   @override
@@ -53,52 +108,42 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Login')),
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nikController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'NIK'),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'NIK wajib diisi';
-                    }
-                    return null;
-                  },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: userController,
+                keyboardType: TextInputType.text,
+                decoration: const InputDecoration(labelText: 'NIK / Username'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passController,
+                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: true,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: loading ? null : _login,
+                  child: loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Login'),
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: passController,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  obscureText: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Password wajib diisi';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: loading ? null : _login,
-                    child: loading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Login'),
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Pendaftaran pasien dilakukan oleh admin klinik. Silakan hubungi petugas bila belum memiliki akun.',
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       ),

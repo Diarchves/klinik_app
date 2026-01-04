@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../services/api_service.dart';
 import '../../utils/session_manager.dart';
 
@@ -13,237 +14,234 @@ class _BuatJanjiPageState extends State<BuatJanjiPage> {
   final TextEditingController poliController = TextEditingController();
   final TextEditingController catatanController = TextEditingController();
 
-  List<Map<String, dynamic>> _dokter = [];
-  bool _loadingDokter = true;
-  bool _submitting = false;
-  String? _error;
-  int? _selectedDokter;
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedTime;
-  int? _pasienId;
+  List<Map<String, dynamic>> dokterList = [];
+  List<Map<String, dynamic>> pasienList = [];
+  int? selectedDokter;
+  int? selectedPasien;
+  DateTime? selectedDate;
+  TimeOfDay? selectedTime;
+  int? idPasien;
+  bool loading = false;
+  bool loadingDokter = true;
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _bootstrap();
+    _loadData();
   }
 
-  Future<void> _bootstrap() async {
-    final id = await SessionManager.getId();
-    if (!mounted) return;
-    if (id == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Silakan login terlebih dahulu.')),
-      );
-      Navigator.pop(context);
-      return;
-    }
-    setState(() => _pasienId = id);
-    await _loadDokter();
-  }
-
-  Future<void> _loadDokter() async {
-    setState(() {
-      _loadingDokter = true;
-      _error = null;
-    });
+  Future<void> _loadData() async {
     try {
-      final result = await ApiService.getDokter();
+      final pasienId = await SessionManager.getId();
+      final isAdmin = await SessionManager.isAdmin();
+      final dokter = await ApiService.getDokter();
+      final parsed = dokter
+          .whereType<Map<String, dynamic>>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      List<Map<String, dynamic>> pasien = [];
+      int? defaultPasien = pasienId;
+      if (isAdmin) {
+        final pasienRes = await ApiService.getPasienList();
+        if (pasienRes['success'] == true) {
+          final data = (pasienRes['data'] as List?) ?? [];
+          pasien = data
+              .whereType<Map<String, dynamic>>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          if (pasien.isNotEmpty) {
+            defaultPasien = (pasien.first['id_pasien'] as num?)?.toInt();
+          }
+        }
+      }
+      if (!mounted) return;
       setState(() {
-        _dokter = result
-          .map((item) => item is Map<String, dynamic>
-            ? item
-            : item is Map
-              ? Map<String, dynamic>.from(
-                item as Map<dynamic, dynamic>,
-                )
-              : <String, dynamic>{})
-            .toList();
+        idPasien = pasienId;
+        dokterList = parsed;
+        selectedDokter = parsed.isNotEmpty
+            ? (parsed.first['id_dokter'] as num?)?.toInt()
+            : null;
+        pasienList = pasien;
+        selectedPasien = defaultPasien;
+        loadingDokter = false;
+        _isAdmin = isAdmin;
       });
     } catch (e) {
-      setState(() => _error = 'Tidak dapat memuat data dokter: $e');
-    } finally {
-      if (mounted) setState(() => _loadingDokter = false);
+      if (!mounted) return;
+      setState(() => loadingDokter = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memuat data dokter: $e')),
+      );
     }
   }
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final result = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? now,
+      initialDate: selectedDate ?? now,
       firstDate: now,
       lastDate: now.add(const Duration(days: 90)),
     );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
+    if (result != null) {
+      setState(() => selectedDate = result);
     }
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
+    final result = await showTimePicker(
       context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
+      initialTime: selectedTime ?? TimeOfDay.now(),
     );
-    if (picked != null) {
-      setState(() => _selectedTime = picked);
+    if (result != null) {
+      setState(() => selectedTime = result);
     }
   }
 
   Future<void> _submit() async {
-    if (_pasienId == null) {
-      _showMessage('Session tidak ditemukan, login ulang.');
+    final targetPasien = _isAdmin ? selectedPasien : idPasien;
+    if (targetPasien == null || targetPasien <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih pasien terlebih dahulu')),
+      );
       return;
     }
-    if (_selectedDokter == null || _selectedDate == null || _selectedTime == null) {
-      _showMessage('Lengkapi dokter, tanggal, dan jam.');
+    if (selectedDokter == null || selectedDate == null || selectedTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lengkapi dokter, tanggal, dan jam')),
+      );
       return;
     }
-    setState(() => _submitting = true);
+
+    final tanggal = '${selectedDate!.year.toString().padLeft(4, '0')}-'
+        '${selectedDate!.month.toString().padLeft(2, '0')}-'
+        '${selectedDate!.day.toString().padLeft(2, '0')}';
+    final jam = '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}';
+
+    setState(() => loading = true);
     try {
-      final tanggal = _selectedDate!.toIso8601String().split('T').first;
-      final jam = _formatTime(_selectedTime!);
       final res = await ApiService.buatJanji(
-        idPasien: _pasienId!,
-        idDokter: _selectedDokter!,
+        idPasien: targetPasien,
+        idDokter: selectedDokter!,
         tanggal: tanggal,
         jam: jam,
-        poli: poliController.text.trim(),
-        catatan: catatanController.text.trim(),
+        poli: poliController.text.trim().isEmpty ? null : poliController.text.trim(),
+        catatan:
+            catatanController.text.trim().isEmpty ? null : catatanController.text.trim(),
       );
-      final nomor = res['data']?['no_antrian'];
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            nomor != null
-                ? 'Janji berhasil! Nomor antrian: $nomor'
-                : 'Janji berhasil dibuat',
-          ),
-        ),
+        SnackBar(content: Text(res['message'] ?? 'Janji berhasil dibuat')),
       );
       Navigator.pop(context, true);
-    } on ApiException catch (e) {
-      _showMessage(e.message);
-    } catch (_) {
-      _showMessage('Gagal terhubung ke server');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+  @override
+  void dispose() {
+    poliController.dispose();
+    catatanController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Buat Janji')),
-      body: _loadingDokter
+      body: loadingDokter
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: _loadDokter,
-                        child: const Text('Coba lagi'),
-                      ),
-                    ],
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  if (_isAdmin) ...[
+                    DropdownButtonFormField<int>(
+                      key: ValueKey('pasien-$selectedPasien'),
+                      initialValue: selectedPasien,
+                      items: pasienList.map((p) {
+                        final id = (p['id_pasien'] as num?)?.toInt();
+                        return DropdownMenuItem<int>(
+                          value: id,
+                          child: Text(p['nama']?.toString() ?? '-'),
+                        );
+                      }).toList(),
+                      decoration: const InputDecoration(labelText: 'Pilih Pasien'),
+                      onChanged: (v) => setState(() => selectedPasien = v),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  DropdownButtonFormField<int>(
+                    key: ValueKey('dokter-$selectedDokter'),
+                    initialValue: selectedDokter,
+                    items: dokterList.map((d) {
+                      final id = (d['id_dokter'] as num?)?.toInt();
+                      return DropdownMenuItem<int>(
+                        value: id,
+                        child: Text(d['nama']?.toString() ?? '-'),
+                      );
+                    }).toList(),
+                    decoration: const InputDecoration(labelText: 'Pilih Dokter'),
+                    onChanged: (v) => setState(() => selectedDokter = v),
                   ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: ListView(
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: poliController,
+                    decoration: const InputDecoration(labelText: 'Poli (opsional)'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: catatanController,
+                    decoration: const InputDecoration(labelText: 'Catatan (opsional)'),
+                    minLines: 2,
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      DropdownButtonFormField<int>(
-                        value: _selectedDokter,
-                        decoration: const InputDecoration(labelText: 'Pilih Dokter'),
-                        items: _dokter.map((dokter) {
-                          final id = _parseId(dokter['id_dokter']);
-                          return DropdownMenuItem<int>(
-                            value: id,
-                            child: Text(dokter['nama']?.toString() ?? '-'),
-                          );
-                        }).toList(),
-                        onChanged: (value) => setState(() => _selectedDokter = value),
-                      ),
-                      const SizedBox(height: 12),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Tanggal Janji'),
-                        subtitle: Text(
-                          _selectedDate == null
-                              ? 'Belum dipilih'
-                              : _selectedDate!.toIso8601String().split('T').first,
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.calendar_today),
+                      Expanded(
+                        child: OutlinedButton(
                           onPressed: _pickDate,
+                          child: Text(
+                            selectedDate == null
+                                ? 'Pilih Tanggal'
+                                : '${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}',
+                          ),
                         ),
                       ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Jam Janji'),
-                        subtitle: Text(
-                          _selectedTime == null
-                              ? 'Belum dipilih'
-                              : _formatTime(_selectedTime!),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.access_time),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
                           onPressed: _pickTime,
-                        ),
-                      ),
-                      TextField(
-                        controller: poliController,
-                        decoration: const InputDecoration(
-                          labelText: 'Poli (opsional)',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: catatanController,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Catatan (opsional)',
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _submitting ? null : _submit,
-                          child: _submitting
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Text('Simpan Janji'),
+                          child: Text(
+                            selectedTime == null
+                                ? 'Pilih Jam'
+                                : '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}',
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: loading ? null : _submit,
+                      child: loading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text('Simpan Janji'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
-  }
-
-  String _formatTime(TimeOfDay time) {
-    final h = time.hour.toString().padLeft(2, '0');
-    final m = time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  int? _parseId(dynamic value) {
-    if (value is int) return value;
-    if (value == null) return null;
-    return int.tryParse(value.toString());
   }
 }
